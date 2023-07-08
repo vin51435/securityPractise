@@ -39,6 +39,7 @@ app.use(session({//@creating session middleware
 }))
 
 require("./config/passportOAuth")//google auth strategy
+require("./config/passportOAuthFacebook")//facebook
 
 //initializing passport, start using passport for authentication
 app.use(passport.initialize());//@populates req.user if user present
@@ -54,6 +55,16 @@ app.get("/auth/google",
 
 app.get('/auth/google/secrets',//needs to be exactly what you had in redirect uri in google api
   passport.authenticate('google', { failureRedirect: '/login' }),
+  function (req, res) {
+    // Successful authentication, redirect home.
+    res.redirect('/secrets');
+  });
+
+app.get('/auth/facebook',
+  passport.authenticate('facebook'));
+
+app.get('/auth/facebook/secrets',
+  passport.authenticate('facebook', { failureRedirect: '/login' }),
   function (req, res) {
     // Successful authentication, redirect home.
     res.redirect('/secrets');
