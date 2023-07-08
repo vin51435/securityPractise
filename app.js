@@ -1,35 +1,49 @@
-require('dotenv').config()
+// @you can refer express-session-authentication project (final-all-in-one branch)
 const express = require('express');
 const ejs = require('ejs');
-const { default: mongoose } = require('mongoose');
-// const encrypt = require('mongoose-encryption');//?using md5
-// const md5 = require("md5")//?using bcrypt
-const bcrypt = require("bcryptjs")
-const salt = bcrypt.genSaltSync(5);
+const session = require('express-session');
+var passport = require('passport');
+const MongoStore = require('connect-mongo')
+
+const connection = require('./config/database')
+const User = connection.models.User;
+const genPassword = require('./lib/passwordUtils').genPassword;
+var routes = require('./routes');
+
+require('dotenv').config()
 
 const app = express();
 
+app.use(express.json())
 app.use(express.static("public"))
 app.set('view engine', 'ejs')
-app.use(express.urlencoded({
-  extended: true
-}));
+app.use(express.urlencoded({ extended: true }));
 
-async function main() {
-  await mongoose.connect("mongodb://127.0.0.1:27017/securityPractiseUser")
-  console.log("DB was connected")
-}
-main().catch(err => console.log("DB no connecte" + err))
 
-const userSchema = new mongoose.Schema({
-  email: String,
-  password: String
+
+require("./config/passport")// Need to require the entire Passport config module so app.js knows about it
+
+const sessionStore = MongoStore.create({
+  mongoUrl: process.env.DB_STRING,
+  CollectionName: 'session'
 })
 
-// userSchema.plugin(encrypt,{secret:process.env.SECRET_KEY,encryptedFields:["password"]})
-//?using md5
+app.use(session({//@creating session middleware
+  // secret: process.env.SECRET,
+  secret: 'process.env.SECRET',
+  resave: false,
+  saveUninitialized: true,
+  store: sessionStore,
+  cookie: {
+    maxAge: 1000 * 60 * 60 * 24
+  }
+}))
 
-const User = mongoose.model("User", userSchema)
+
+//initializing passport, start using passport for authentication
+app.use(passport.initialize());//@populates req.user if user present
+app.use(passport.session());//@let passport use session ,both middlware connected
+
 
 app.get("/", (req, res) => {
   res.render("home")
@@ -39,39 +53,64 @@ app.get("/login", (req, res) => {
   res.render("login")
 })
 
-app.post("/login", (req, res) => {
-  const username = req.body.username;
-  const password = (req.body.password);
-  User.findOne({ email: username })
-    .then(found => {
-      if (bcrypt.compare(password, found.password)) {
-        res.render("secrets")
-      } else {
-        res.send("Wrong password")
-      }
-    })
-    .catch(err => console.log(err))
-})
+app.post('/login', passport.authenticate('local', { failureRedirect: '/login', successRedirect: '/secrets' }), (err, req, res, next) => {
+  if (err) next(err);
+});
 
 
 app.get("/register", (req, res) => {
   res.render("register")
 })
 
-app.post("/register", (req, res) => {
-  bcrypt.hash(req.body.password, salt, function (err, hash) {
-    const newUser = new User({
-      email: req.body.username,
-      password: hash
+app.post("/register", function (req, res) {
+  const saltHash = genPassword(req.body.password);
+
+  const salt = saltHash.salt;
+  const hash = saltHash.hash;
+
+  const newUser = new User({
+    username: req.body.username,
+    hash: hash,
+    salt: salt
+  });
+  newUser.save()
+    .then((user) => {
+      console.log(user);
     })
-    newUser.save()
-      .then(() => {
-        console.log("saved user")
-        res.render("secrets")
-      })
-      .catch(err => console.log(err))
-  })
+    .catch(err => {
+      console.log("cannot save")
+      res.send("error, cannot save")
+    })
+  res.redirect('/login');
+});
+
+app.get("/secrets", (req, res) => {
+  res.set(
+    'Cache-Control',
+    'no-cache, private, no-store, must-revalidate, max-stal e=0, post-check=0, pre-check=0'
+  );//clear cached data of the page
+  if (req.isAuthenticated()) {
+    res.render("secrets")
+  } else {
+    res.send("not authenticated")
+    console.log("auth? " + req.isAuthenticated())
+  }
 })
+
+app.get("/logout", (req, res) => {
+  req.logout(function (err) {
+    if (err) { return next(err); }
+    res.redirect('/login');
+  });
+})
+
+function errorHandler(err, req, res, next) {
+  // if(err){
+  //   res.send("<h1>There was an error</h1>")
+  // }
+  res.json({ err: err })
+}
+app.use(errorHandler)
 
 app.listen(3000, (req, res) => {
   console.log("Server started on port 3000.");
