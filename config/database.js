@@ -17,7 +17,8 @@ const UserSchema = new mongoose.Schema({
   hash: String,
   salt: String,
   googleId:String,
-  facebookId:String
+  facebookId:String,
+  secret:Array
 })
 
 UserSchema.plugin(findOrCreate)

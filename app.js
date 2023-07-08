@@ -106,16 +106,37 @@ app.post("/register", function (req, res) {
 });
 
 app.get("/secrets", (req, res) => {
+  User.find({ "secret": { $ne: null } })
+  .then(found=>{ 
+    res.render("secrets",{secrets:found})
+  })
+  .catch(err=>console.log(err))
+})
+
+app.get("/submit", (req, res) => {
   res.set(
     "Cache-Control",
     "no-cache, private, no-store, must-revalidate, max-stal e=0, post-check=0, pre-check=0"
   );//clear cached data of the page
   if (req.isAuthenticated()) {
-    res.render("secrets")
+    res.render("submit")
   } else {
-    res.send("not authenticated")
+    res.redirect("/login")
     console.log("auth? " + req.isAuthenticated())
   }
+})
+
+app.post("/submit", (req, res) => {
+  const submittedSecret = req.body.secret
+  //find the current user and save the secret into their doc
+  // passport saves user detail after login in req.user
+  // console.log(req.user)
+  User.findById(req.user.id)
+    .then(found => {
+      found.secret.push(submittedSecret)
+      found.save().then(() => res.redirect("/secrets"))
+    })
+    .catch(err => console.log(err))
 })
 
 app.get("/logout", (req, res) => {
