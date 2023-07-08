@@ -1,4 +1,5 @@
 const mongoose = require('mongoose')
+const findOrCreate = require('mongoose-findorcreate')
 
 require("dotenv").config()
 
@@ -14,8 +15,11 @@ connection.on('connecting', () => {
 const UserSchema = new mongoose.Schema({
   username: String,
   hash: String,
-  salt: String
+  salt: String,
+  googleId:String
 })
+
+UserSchema.plugin(findOrCreate)
 
 const User = connection.model("User", UserSchema)//no need to export, can excess it in mongoose.Model
 
